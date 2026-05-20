@@ -1,0 +1,293 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ecorecrea - Transforma, Crea y Recicla</title>
+    
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet-routing-machine@latest/dist/leaflet-routing-machine.css" />
+    <script src="https://unpkg.com/leaflet-routing-machine@latest/dist/leaflet-routing-machine.js"></script>
+
+    <style>
+        /* Diseño General: Colores verdes y amigables  */
+        body { 
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; 
+            margin: 0; 
+            background-color: #e8f5e9; 
+            color: #2e3d2e; 
+            scroll-behavior: smooth;
+        }
+
+        header { 
+            background-color: #2e7d32; 
+            color: white; 
+            padding: 1rem 2rem; 
+            display: flex; 
+            justify-content: space-between; 
+            align-items: center; 
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1); 
+            position: sticky;
+            top: 0;
+            z-index: 1000;
+        }
+
+        header h1 { margin: 0; font-size: 1.8rem; }
+
+        .btn { 
+            background-color: #66bb6a; 
+            color: white; 
+            border: none; 
+            padding: 10px 20px; 
+            border-radius: 25px; 
+            cursor: pointer; 
+            font-weight: bold; 
+            transition: 0.3s;
+        }
+
+        .btn:hover { background-color: #43a047; transform: translateY(-2px); }
+
+        /* Sección Hero (Bienvenida) [cite: 3, 18] */
+        .hero { 
+            text-align: center; 
+            padding: 5rem 2rem; 
+            background: linear-gradient(rgba(232, 245, 233, 0.85), rgba(232, 245, 233, 0.85)), 
+                        url('https://images.unsplash.com/photo-1542601906990-b4d3fb778b09?auto=format&fit=crop&w=1350&q=80') center/cover;
+        }
+
+        .hero h2 { font-size: 2.8rem; color: #1b5e20; margin-bottom: 15px; }
+        .hero p { font-size: 1.2rem; max-width: 700px; margin: 0 auto 2rem auto; line-height: 1.6; }
+
+        /* Tarjetas de Funciones Principales [cite: 8, 15] */
+        .features { 
+            display: flex; 
+            justify-content: center; 
+            padding: 3rem 2rem; 
+            flex-wrap: wrap; 
+            gap: 25px; 
+            background-color: #f1f8e9;
+        }
+
+        .card { 
+            background: white; 
+            padding: 2rem; 
+            border-radius: 20px; 
+            box-shadow: 0 10px 20px rgba(0,0,0,0.05); 
+            width: 300px; 
+            text-align: center; 
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+
+        .card:hover { transform: translateY(-10px); box-shadow: 0 15px 30px rgba(0,0,0,0.1); }
+        .card h3 { color: #2e7d32; margin-bottom: 15px; }
+        .card b { color: #66bb6a; display: block; margin-top: 15px; }
+
+        /* Sección del Mapa [cite: 11, 12] */
+        .map-section { padding: 4rem 2rem; text-align: center; background: white; }
+        .map-container { 
+            max-width: 1100px; 
+            margin: 2rem auto; 
+            border: 5px solid #a5d6a7; 
+            border-radius: 25px; 
+            overflow: hidden; 
+            box-shadow: 0 8px 25px rgba(0,0,0,0.15); 
+        }
+        #map { height: 550px; width: 100%; cursor: crosshair; }
+
+        .btn-ruta { 
+            background: #1976d2; 
+            color: white; 
+            border: none; 
+            padding: 10px; 
+            border-radius: 8px; 
+            cursor: pointer; 
+            margin-top: 10px; 
+            width: 100%; 
+            font-weight: bold; 
+        }
+
+        /* Modales (Registro y Nuevo Lugar) [cite: 7] */
+        .modal { 
+            display: none; 
+            position: fixed; 
+            top: 0; left: 0; 
+            width: 100%; height: 100%; 
+            background: rgba(0,0,0,0.7); 
+            justify-content: center; 
+            align-items: center; 
+            z-index: 2000; 
+        }
+
+        .modal-content { 
+            background: white; 
+            padding: 2.5rem; 
+            border-radius: 20px; 
+            width: 350px; 
+            text-align: center; 
+            animation: fadeIn 0.3s ease;
+        }
+
+        @keyframes fadeIn { from { opacity: 0; transform: scale(0.9); } to { opacity: 1; transform: scale(1); } }
+
+        input { 
+            width: 90%; 
+            padding: 12px; 
+            margin: 10px 0; 
+            border: 2px solid #e0e0e0; 
+            border-radius: 10px; 
+            outline: none;
+        }
+
+        input:focus { border-color: #66bb6a; }
+    </style>
+</head>
+<body>
+
+    <header>
+        <h1>ecorecrea</h1>
+        <button class="btn" onclick="openModal('loginModal')">Registrarse</button>
+    </header>
+
+    <section class="hero">
+        <h2>Reciclar es Crear</h2>
+        <p>Conecta con personas, encuentra centros de acopio en Colima y transforma residuos en arte ecológico. [cite: 3, 5]</p>
+        <button class="btn" style="padding: 15px 30px; font-size: 1.1rem;" onclick="scrollToMap()">Explorar el Mapa</button>
+    </section>
+
+    <section class="features">
+        <div class="card" onclick="scrollToMap()">
+            <h3>📍 Centros de Recolección</h3>
+            <p>Encuentra lugares cercanos para depositar plástico, aluminio o ropa. </p>
+            <b>Ver mapa ahora ↓</b>
+        </div>
+        
+        <div class="card" onclick="instruccionesCrear()">
+            <h3>🤝 Crea un Centro</h3>
+            <p>¿Conoces un punto de acopio? Regístralo para que otros lo encuentren. [cite: 12]</p>
+            <b>¿Cómo registrar?</b>
+        </div>
+        
+        <div class="card" onclick="instruccionesRuta()">
+            <h3>🚗 Cómo Llegar</h3>
+            <p>Obtén rutas exactas desde tu ubicación GPS hasta cualquier centro. </p>
+            <b>Probar GPS</b>
+        </div>
+    </section>
+
+    <section id="mapaSeccion" class="map-section">
+        <h2 style="color: #2e7d32;">Comunidad ecorecrea en Colima</h2>
+        <p>Haz <b>clic derecho</b> en el mapa para proponer un nuevo lugar de reciclaje o taller. [cite: 12]</p>
+        <div class="map-container">
+            <div id="map"></div>
+        </div>
+    </section>
+
+    <div id="loginModal" class="modal">
+        <div class="modal-content">
+            <h3 style="color: #2e7d32;">Únete a la Comunidad</h3>
+            <form action="/registro" method="POST">
+                <input type="text" name="nombre" placeholder="Nombre completo" required>
+                <input type="email" name="correo" placeholder="Correo electrónico" required>
+                <input type="password" name="password" placeholder="Contraseña segura" required>
+                <button type="submit" class="btn" style="width: 100%; margin-top: 15px;">Crear Cuenta</button>
+            </form>
+            <button class="btn" style="width: 100%; margin-top: 10px; background: #ef5350;" onclick="closeModal('loginModal')">Cerrar</button>
+        </div>
+    </div>
+
+    <div id="placeModal" class="modal">
+        <div class="modal-content">
+            <h3 style="color: #2e7d32;">Registrar Nuevo Punto</h3>
+            <form action="/agregar_lugar" method="POST">
+                <input type="text" name="nombre_lugar" placeholder="Ej: Centro de Acopio PET" required>
+                <input type="text" name="descripcion" placeholder="¿Qué materiales reciben?" required>
+                <input type="hidden" name="lat" id="latInput">
+                <input type="hidden" name="lng" id="lngInput">
+                <button type="submit" class="btn" style="width: 100%; margin-top: 15px;">Guardar Punto</button>
+            </form>
+            <button class="btn" style="width: 100%; margin-top: 10px; background: #ef5350;" onclick="closeModal('placeModal')">Cancelar</button>
+        </div>
+    </div>
+
+    <script>
+        // Configuración Inicial del Mapa (Centrado en Colima)
+        var map = L.map('map').setView([19.2433, -103.725], 13);
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            attribution: '&copy; OpenStreetMap contributors'
+        }).addTo(map);
+
+        var miUbicacion = null;
+        var controlRuta = null;
+
+        // Detectar Ubicación del Usuario (GPS) 
+        map.locate({setView: true, maxZoom: 15});
+        map.on('locationfound', function(e) {
+            miUbicacion = e.latlng;
+            L.circle(miUbicacion, {radius: 200, color: '#66bb6a'}).addTo(map);
+            L.marker(miUbicacion).addTo(map).bindPopup("<b>Estás aquí</b>").openPopup();
+        });
+
+        // Funciones de las Tarjetas
+        function scrollToMap() {
+            document.getElementById('mapaSeccion').scrollIntoView({behavior: 'smooth'});
+        }
+
+        function instruccionesCrear() {
+            scrollToMap();
+            setTimeout(() => {
+                alert("¡Es muy fácil!\n\n1. Busca el lugar en el mapa.\n2. Haz CLIC DERECHO sobre la ubicación exacta.\n3. Escribe el nombre y lo que reciben ahí.");
+            }, 600);
+        }
+
+        function instruccionesRuta() {
+            scrollToMap();
+            setTimeout(() => {
+                alert("Para saber cómo llegar:\n\n1. Haz clic en un marcador verde del mapa.\n2. Presiona el botón azul 'Cómo llegar'.\n3. Aparecerá la ruta desde tu posición actual.");
+            }, 600);
+        }
+
+        // Trazar Ruta (GPS)
+        window.trazarRuta = function(latDest, lngDest) {
+            if (!miUbicacion) {
+                alert("Necesitamos tu ubicación GPS para trazar la ruta. Por favor, permite el acceso en tu navegador.");
+                return;
+            }
+            if (controlRuta) { map.removeControl(controlRuta); }
+
+            controlRuta = L.Routing.control({
+                waypoints: [L.latLng(miUbicacion.lat, miUbicacion.lng), L.latLng(latDest, lngDest)],
+                language: 'es',
+                lineOptions: { styles: [{color: '#1976d2', opacity: 0.7, weight: 6}] },
+                createMarker: function() { return null; }
+            }).addTo(map);
+        };
+
+        // Cargar lugares desde la Base de Datos 
+        fetch('/api/lugares')
+            .then(res => res.json())
+            .then(data => {
+                data.forEach(lugar => {
+                    var popupHtml = `
+                        <div style="text-align:center;">
+                            <b>${lugar.nombre}</b><br>${lugar.descripcion}<br>
+                            <button class="btn-ruta" onclick="trazarRuta(${lugar.lat}, ${lugar.lng})">🚗 Cómo llegar</button>
+                        </div>`;
+                    L.marker([lugar.lat, lugar.lng]).addTo(map).bindPopup(popupHtml);
+                });
+            });
+
+        // Evento Clic Derecho para agregar lugar [cite: 12]
+        map.on('contextmenu', function(e) {
+            document.getElementById('latInput').value = e.latlng.lat;
+            document.getElementById('lngInput').value = e.latlng.lng;
+            openModal('placeModal');
+        });
+
+        // Control de Modales
+        function openModal(id) { document.getElementById(id).style.display = 'flex'; }
+        function closeModal(id) { document.getElementById(id).style.display = 'none'; }
+    </script>
+</body>
+</html>
