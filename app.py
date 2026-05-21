@@ -1,78 +1,103 @@
-from flask import Flask, render_template, request, g, jsonify
-import sqlite3
+from flask import Flask, render_template, request, jsonify
+import os
+import psycopg2
+from psycopg2.extras import DictCursor
 
 app = Flask(__name__)
-DATABASE = 'ecorecrea.db'
+
+# 🔑 PEGA AQUÍ TU ENLACE URI DE SUPABASE (Recuerda cambiar [YOUR-PASSWORD] por tu contraseña real)
+DATABASE_URL = "postgresql://postgres:TU_CONTRASEÑA_DE_SUPABASE@db.xxxxxx.supabase.co:5432/postgres"
 
 def get_db():
-    db = getattr(g, '_database', None)
-    if db is None:
-        db = g._database = sqlite3.connect(DATABASE)
-        db.row_factory = sqlite3.Row
-    return db
+    """Establece la conexión con la base de datos PostgreSQL en la nube."""
+    conn = psycopg2.connect(DATABASE_URL, cursor_factory=DictCursor)
+    return conn
 
-@app.teardown_appcontext
-def close_connection(exception):
-    db = getattr(g, '_database', None)
-    if db is not None:
-        db.close()
+def inicializar_base_de_datos():
+    """Crea la tabla en la nube automáticamente si no existe al encender el servidor."""
+    try:
+        conn = get_db()
+        cursor = conn.cursor()
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS lugares (
+                id SERIAL PRIMARY KEY,
+                nombre TEXT NOT NULL,
+                descripcion TEXT,
+                lat REAL NOT NULL,
+                lng REAL NOT NULL
+            )
+        ''')
+        conn.commit()
+        cursor.close()
+        conn.close()
+        print("Base de datos en la nube inicializada correctamente.")
+    except Exception as e:
+        print(f"Error al conectar con la base de datos de la nube: {e}")
 
-def init_db():
-    with app.app_context():
-        db = get_db()
-        db.execute('''CREATE TABLE IF NOT EXISTS usuarios (id INTEGER PRIMARY KEY AUTOINCREMENT, nombre TEXT, correo TEXT UNIQUE, password TEXT)''')
-        db.execute('''CREATE TABLE IF NOT EXISTS lugares (id INTEGER PRIMARY KEY AUTOINCREMENT, nombre TEXT, descripcion TEXT, lat REAL, lng REAL)''')
-        db.commit()
+# Ejecutamos la creación de tablas al arrancar la app
+inicializar_base_de_datos()
 
 @app.route('/')
 def index():
+    # Renderiza tu mapa principal (busca index.html dentro de la carpeta templates)
     return render_template('index.html')
 
-@app.route('/registro', methods=['POST'])
+@app.route('/registro')
 def registro():
-    nombre = request.form['nombre']
-    correo = request.form['correo']
-    password = request.form['password']
-    db = get_db()
-    try:
-        db.execute('INSERT INTO usuarios (nombre, correo, password) VALUES (?, ?, ?)', (nombre, correo, password))
-        db.commit()
-        return f'''
-        <div style="text-align:center; font-family:sans-serif; margin-top:100px; color:#2e7d32;">
-            <h1>¡Registro exitoso!</h1>
-            <p>Bienvenido a ecorecrea, {nombre}.</p>
-            <br>
-            <a href="/" style="background-color:#66bb6a; color:white; padding:12px 25px; text-decoration:none; border-radius:25px; font-weight:bold;">Volver al inicio</a>
-        </div>
-        '''
-    except sqlite3.IntegrityError:
-        # Aquí se controla si el correo ya existe en la base de datos
-        return f'''
-        <div style="text-align:center; font-family:sans-serif; margin-top:100px; color:#c62828;">
-            <h1>Error: Cuenta ya registrada</h1>
-            <p>El correo electrónico <b>{correo}</b> ya se encuentra registrado en nuestra comunidad.</p>
-            <br>
-            <a href="/" style="background-color:#ef5350; color:white; padding:12px 25px; text-decoration:none; border-radius:25px; font-weight:bold;">Intentar de nuevo</a>
-        </div>
-        '''
+    # Muestra el formulario para registrar un nuevo punto
+    return render_template('registro.html')
 
 @app.route('/agregar_lugar', methods=['POST'])
 def agregar_lugar():
     nombre = request.form['nombre_lugar']
     descripcion = request.form['descripcion']
-    lat = request.form['lat']
-    lng = request.form['lng']
-    db = get_db()
-    db.execute('INSERT INTO lugares (nombre, descripcion, lat, lng) VALUES (?, ?, ?, ?)', (nombre, descripcion, float(lat), float(lng)))
-    db.commit()
-    return f"<h1>¡Centro Agregado!</h1><p>Todos los usuarios ahora pueden ver este punto en el mapa y saber cómo llegar.</p><a href='/'>Volver al mapa</a>"
+    lat = float(request.form['lat']) # Convertimos a número decimal
+    lng = float(request.form['lng']) # Convertimos a número decimal
+    
+    try:
+        conn = get_db()
+        cursor = conn.cursor()
+        
+        # En PostgreSQL de la nube se usa %s en lugar de ? para insertar valores
+        cursor.execute(
+            'INSERT INTO lugares (nombre, descripcion, lat, lng) VALUES (%s, %s, %s, %s)', 
+            (nombre, descripcion, lat, lng)
+        )
+        
+        conn.commit()
+        cursor.close()
+        conn.close()
+        
+        return "<h1>¡Centro Agregado con Éxito!</h1><p>Los datos ya están guardados seguros en la nube de Supabase. Ya puedes cerrar esta pestaña.</p>"
+    except Exception as e:
+        return f"<h1>Error al guardar en la nube</h1><p>{str(e)}</p>"
 
 @app.route('/api/lugares')
 def get_lugares():
-    db = get_db()
-    lugares = db.execute('SELECT * FROM lugares').fetchall()
-    return jsonify([dict(ix) for ix in lugares])
+    try:
+        conn = get_db()
+        cursor = conn.cursor()
+        
+        cursor.execute('SELECT * FROM lugares')
+        lugares_raw = cursor.fetchall()
+        
+        cursor.close()
+        conn.close()
+        
+        # Convertimos los resultados a un formato JSON limpio que Leaflet entienda
+        lugares = []
+        for ix in lugares_raw:
+            lugares.append({
+                "id": ix["id"],
+                "nombre": ix["nombre"],
+                "descripcion": ix["descripcion"],
+                "lat": ix["lat"],
+                "lng": ix["lng"]
+            })
+            
+        return jsonify(lugares)
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
 
 if __name__ == '__main__':
-    init_db()
-    app.run(debug=True, host='0.0.0.0', port=5000)
+    app.run(debug=True)
